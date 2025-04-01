@@ -11,7 +11,11 @@ import requests
 
 app = Flask(__name__)    
 CORS(app, origins=[os.getenv("WEBSITE_URL")])
-app.config['SQLALCHEMY_DATABASE_URI']= os.getenv('DATABASE_URL')
+DATABASE_URL = os.getenv('DATABASE_URL')
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+app.config['SQLALCHEMY_DATABASE_URI']= DATABASE_URL
+
 db = SQLAlchemy(app)
 session = boto3.Session(
     aws_access_key_id = os.getenv('ACCESS_KEY'),
