@@ -85,7 +85,7 @@ def hello_world():
 @app.route("/create/user/<string:user_id>", methods=['POST'])
 def create_user(user_id):
     result = User.query.filter(User.id == user_id).first()
-    if result != None:
+    if result == None:
         user = User(id = user_id)
         db.session.add(user)
         db.session.commit() 
