@@ -1,4 +1,4 @@
-from flask import Flask , jsonify
+from flask import Flask , jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 from sqlalchemy import text
 import boto3
 import os
-import requests
+#import requests
 
 
 app = Flask(__name__)    
@@ -43,7 +43,7 @@ class Project(db.Model):
     __tablename__ = 'project'
     id = db.Column(db.Integer, primary_key = True)
     name = db.Column(db.String(50))
-    model_id = db.Column(db.Integer)
+    model_id = db.Column(db.Integer,autoincrement=True)
 
 class Project_To_Tag(db.Model):
     __tablename__ = 'project_to_tag'
@@ -58,10 +58,21 @@ class User_To_Project(db.Model):
 
 class Annotation(db.Model):
     __tablename__ = 'annotation'
-    anotation_id = db.Column(db.Integer, primary_key = True)
-    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), primary_key = True)
+    anotation_id = db.Column(db.Integer,autoincrement=True, primary_key = True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'))
+    name = db.Column(db.String(50))
     text = db.Column(db.String(500))
-    location = db.Column(db.String(15))
+    size = db.Column(db.String(50))
+    color = db.Column(db.String(50))
+
+    object_anchor_x = db.Column(db.Float, nullable=False)
+    object_anchor_y = db.Column(db.Float, nullable=False)
+    object_anchor_z = db.Column(db.Float, nullable=False)
+
+    div_anchor_x = db.Column(db.Float, nullable=False)
+    div_anchor_y = db.Column(db.Float, nullable=False)
+    div_anchor_z = db.Column(db.Float, nullable=False)
+
 
 
 with app.app_context():
@@ -71,20 +82,98 @@ with app.app_context():
 def hello_world():
     return "<p>Hello world</p>"
 
-@app.route("/buckets", methods=['GET'])
-def get_buckets():
-    bucket_list = [{"s": "33"}]
-    response = s3.list_buckets()
-    for bucket in response['Buckets']:
-        print(bucket['Name'])
-    presigned_url = s3.generate_presigned_url(
-        ClientMethod = 'get_object',
-        Params = {'Bucket': "3d-scribe-models", "Key": "airboat.obj"},
-        ExpiresIn=3600
-    )
-    return jsonify(bucket_list)
+@app.route("/create/user/<string:user_id>", methods=['POST'])
+def create_user(user_id):
+    result = User.query.filter(User.id == user_id).first()
+    if result != None:
+        user = User(id = user_id)
+        db.session.add(user)
+        db.session.commit() 
+    return jsonify([{'result':"200"}])
+@app.route("/retrive/annotations/<int:project_id>/<string:user_id>", methods=['GET'])
+def return_annotations(project_id,user_id):
+    result = Annotation.query.filter(Annotation.project_id == project_id).all()
+    return_item = [{"id":item.anotation_id, 'name': item.name}for item in result]
+    return jsonify(return_item)
 
-@app.route("/models/<string:model_uri>")
+@app.route("/retrive/annotation/<int:project_id>/<string:user_id>/<int:annotation_id>", methods=['GET'])
+def return_annotation(project_id, user_id, annotation_id):
+    result = Annotation.query.filter(Annotation.anotation_id == annotation_id).first()
+    return_item = [{"id":result.anotation_id, 'name': result.name, 'text': result.text,'size': result.size, 'color': result.color, 'object_anchor_x': result.object_anchor_x, 'object_anchor_y' : result.object_anchor_y,'object_anchor_z' : result.object_anchor_z,'div_anchor_x' : result.div_anchor_x,'div_anchor_y' : result.div_anchor_y,'div_anchor_z' : result.div_anchor_z}]
+    return jsonify(return_item)
+
+@app.route("/update/annotation/<int:annotation_id><string:user_id>/<string:name_v>/<string:text_v>/<string:size_v>/<string:color_v>/<string:object_x>/<string:object_y>/<string:object_z>/<string:x_anchor>/<string:y_anchor>/<string:z_anchor>", methods=['POST'])
+def update_annotation(annotation_id,name_v, text_v, size_v, color_v, object_x, object_y, object_z, x_anchor, y_anchor, z_anchor):
+    result = Annotation.query.filter(Annotation.anotation_id == annotation_id).first()
+    if result != None:
+        result.name = name_v
+        result.text = text_v
+        result.size = size_v
+        result.color = color_v
+        result.div_anchor_x = float(object_x)
+        result.div_anchor_y =  float(object_y)
+        result.div_anchor_z = float(object_z)
+        result.object_anchor_x = float(x_anchor) 
+        result.object_anchor_y = float(y_anchor)
+        result.object_anchor_z = float(z_anchor)
+        db.session.commit()
+        return jsonify([{'result': 200}])
+    else:
+        return jsonify([{'result': 400}])
+
+@app.route("/create/annotation/<int:project_id_v>/<string:user_id>/<string:name_v>/<string:text_v>/<string:size_v>/<string:color_v>/<string:object_x>/<string:object_y>/<string:object_z>/<string:x_anchor>/<string:y_anchor>/<string:z_anchor>", methods=['POST'])
+def create_annotation(project_id_v, user_id, name_v, text_v, size_v, color_v, object_x, object_y, object_z, x_anchor, y_anchor, z_anchor):
+    print("preresult")
+    result = Annotation.query.filter(Annotation.name == name_v).first()
+    print("this is result: ",result)
+    if result is None:
+        annotation = Annotation(project_id = project_id_v, name = name_v, text = text_v,
+                                 size = size_v, color = color_v, div_anchor_x =float(object_x),
+                                 div_anchor_y =  float(object_y), div_anchor_z = float(object_z), 
+                                 object_anchor_x = float(x_anchor), object_anchor_y = float(y_anchor), object_anchor_z = float(z_anchor))
+        db.session.add(annotation)
+        db.session.commit()
+        return jsonify([{'id':annotation.anotation_id}])
+    else:
+        print("project name already taken")
+        return jsonify([{'id':"-400"}])
+
+@app.route("/create/project/<string:project_name>/<string:user_id>", methods=['POST'])
+def create_projects(project_name, user_id):
+    result = Project.query.filter(Project.name == project_name).first()
+    file = request.files['file']
+    print(result)
+    print(file)
+    print(project_name)
+    print(user_id)
+    print(file.filename)
+    
+    if result == None:
+        
+        try:
+            response = s3.upload_fileobj(file, "3d-scribe-models", "models/"+project_name)
+
+            model = Model3D( name = project_name, key = "models/"+project_name)
+            db.session.add(model)
+            db.session.commit()
+
+            project = Project(name = project_name, model_id = model.id)
+            db.session.add(project)
+            db.session.commit()
+
+            user = User_To_Project(user_id = user_id, project_id = project.id)
+            db.session.add(user)
+            db.session.commit()
+        except ClientError as e:
+            print(e)
+
+        return jsonify([{'result':"200"}])
+    else:
+        print("project name already taken")
+        return jsonify([{'result':"400"}])
+
+
+@app.route("/models/<string:model_uri>",methods=['GET'])
 def get_model(model_uri):
     uri_array = model_uri.split('/')
     model_uri = "/".join(uri_array[len(uri_array)-2:len(uri_array)])
@@ -99,7 +188,7 @@ def get_model(model_uri):
         return None
     return  jsonify( [{"uri": response }] )
 
-@app.route("/url/<int:project_id>")
+@app.route("/url/<int:project_id>", methods=['GET'])
 def get_presigned_url(project_id):
     query = text('''
     SELECT model.key
@@ -135,15 +224,18 @@ def get_models():
 @app.route("/model/names/<string:user_id>", methods=['GET'])
 def get_model_names(user_id):
     query = text('''
-    SELECT model.name AS name, project.id AS id
-    FROM "user"
-    JOIN user_to_project ON user_to_project.user_id = :user_id
-    JOIN project ON user_to_project.project_id = project.id
-    JOIN model ON project.model_id = model.id
+    SELECT project.name AS name, project.id AS id
+    FROM user_to_project
+    LEFT JOIN "user" ON "user".id = user_to_project.user_id
+    LEFT JOIN project ON user_to_project.project_id = project.id
+    LEFT JOIN model ON project.model_id = model.id
+    WHERE "user".id = :user_id;
     ''')
     results = db.session.execute(query, {'user_id': user_id}).fetchall()
-
-    response = [{'model_name': row[0], 'project_id': row[1]} for row in results]
+    if len(results) == 0:
+        return jsonify([{"project_name": "No Projects", "project_id": ""}])
+    
+    response = [{'project_name': row[0], 'project_id': row[1]} for row in results]
 
     return jsonify(response)
     
