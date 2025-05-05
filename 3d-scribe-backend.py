@@ -137,7 +137,15 @@ def create_annotation(project_id_v, user_id, name_v, text_v, size_v, color_v, ob
     else:
         print("project name already taken")
         return jsonify([{'id':"-400"}])
-
+@app.route("/remove/annotation/<int:project_id>/<string:user_id>/<int:annotation_id>", methods=['POST'])
+def remove_annotation(project_id, user_id,annotation_id):
+    annotation = Annotation.query.filter(Annotation.anotation_id == annotation_id).first()
+    if annotation != None:
+        db.session.delete(annotation)
+        db.session.commit()
+        return jsonify([{'result': 200}])
+    else:
+        return jsonify([{'result': 400}])
 @app.route("/create/project/<string:project_name>/<string:user_id>", methods=['POST'])
 def create_projects(project_name, user_id):
     result = Project.query.filter(Project.name == project_name).first()
